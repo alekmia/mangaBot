@@ -109,7 +109,10 @@ def cancel_sub(message):
         cursor.execute(sqlite_delete_with_param, data_tuple)
         sqlite_connection.commit()
 
-        msg = bot.send_message(message.chat.id, "Successfully unsubscribed from " + title + "!")
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        item1 = types.KeyboardButton("Manga")
+        keyboard.add(item1)
+        msg = bot.send_message(message.chat.id, "Successfully unsubscribed from " + title + "!", reply_markup=keyboard)
     except Exception:
         msg = bot.send_message(message.chat.id, "Try another number, if you can't find your manga, type 0")
         bot.register_next_step_handler(msg, cancel_sub)
@@ -181,7 +184,10 @@ def add_finale(message, options, curs):
                 curs.execute(sqlite_insert_with_param, data_tuple)
                 sqlite_connection.commit()
 
-            msg = bot.send_message(message.chat.id, "Successfully subbed to " + title + "!")
+            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            item1 = types.KeyboardButton("Manga")
+            keyboard.add(item1)
+            msg = bot.send_message(message.chat.id, "Successfully subbed to " + title + "!", reply_markup=keyboard)
     except Exception:
         msg = bot.send_message(message.chat.id, "Try another number, if you can't find your manga, type 0")
         bot.register_next_step_handler(msg, add_finale, options, curs)

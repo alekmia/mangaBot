@@ -8,16 +8,17 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service as ChromeService
 
 
 def search(name):
     # name = "Blue Lock"
-    PATH = "C:\Program Files (x86)\geckodriver.exe"
-
     searchUrl = "https://mangareader.to/"
-
-    s = Service(PATH)
-    driver = webdriver.Firefox(service=s)
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
     driver.get(searchUrl)
 
     sleep(1)
@@ -39,4 +40,3 @@ def search(name):
     driver.quit()
 
     return new_elements
-
