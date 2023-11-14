@@ -5,6 +5,8 @@ from telebot import types
 import sqlite3 as sql
 import searchManga
 import settings
+from apscheduler.schedulers.blocking import BlockingScheduler
+from threading import Thread
 
 bot = telebot.TeleBot(settings.BOT_TOKEN)
 
@@ -13,7 +15,7 @@ sqlite_connection = sql.connect('userSubs.db', check_same_thread=False)
 cursor = sqlite_connection.cursor()
 
 sqlite_create_table_query = '''CREATE TABLE IF NOT EXISTS userSubs (
-                                   userid INTEGER,
+                                   chatId INTEGER,
                                    sub VARCHAR NOT NULL);'''
 cursor.execute(sqlite_create_table_query)
 sqlite_connection.commit()
@@ -28,7 +30,7 @@ sqlite_connection.commit()
 @bot.message_handler(commands=['start'])
 def start_message(message):
     a = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    item1 = types.KeyboardButton("Manga")
+    item1 = types.KeyboardButton("Add")
     a.add(item1)
     bot.send_message(message.chat.id, 'Hello, this bot will update you on new chapters of your favorite manga!\n'
                                       "type /add to subscribe to a manga\n"
@@ -43,26 +45,28 @@ def help_message(message):
     bot.send_message(message.chat.id, 'This is a bot that for now tells you the latest chapter of a manga\n\n'
                                       'Type in the name of the manga and after choose your desired title from the list'
                                       '\n\n/manga to choose out of your manga\n'
+                                      '(To see your non-empty manga list you have to sub to a manga first)'
                                       '/add to subscribe to a title\n'
                                       '/del to unsubscribe from a title')
 
 
-def answer_anyManga(message):
-    bot.send_message(message.chat.id, 'Wait a minute... Fetching data...')
-    info = cursor.execute('SELECT url FROM urls WHERE title=?', (message.text,))
+def answer_anyManga(messageId, text, silent=False):
+    if not silent:
+        bot.send_message(messageId, 'Wait a minute... Fetching data...')
+    info = cursor.execute('SELECT url FROM urls WHERE title=?', (text,))
     data = info.fetchone()
 
     a, b = JoJoSiteParse.parseSite(data[0])
-
+    b = "The latest chapter of " + text + " is:\n" + '<a href="' + data[0] + '">' + b + '</a>'
     a = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Manga")
     a.add(item1)
-    bot.send_message(message.chat.id, b, reply_markup=a)
+    bot.send_message(messageId, b, reply_markup=a, parse_mode='HTML', disable_web_page_preview=True)
 
 
 @bot.message_handler(commands=['manga'])
 def answer_manga(message):
-    info = cursor.execute('SELECT sub FROM userSubs WHERE userid=?', (message.from_user.id,))
+    info = cursor.execute('SELECT sub FROM userSubs WHERE chatId=?', (message.chat.id,))
     data = info.fetchall()
     print(data)
 
@@ -80,7 +84,7 @@ def answer_manga(message):
 @bot.message_handler(commands=['del'])
 def del_sub(message):
     if message.text == "/del":
-        info = cursor.execute('SELECT sub FROM userSubs WHERE userid=?', (message.from_user.id,))
+        info = cursor.execute('SELECT sub FROM userSubs WHERE chatId=?', (message.chat.id,))
         data = info.fetchall()
         if data == None:
             msg = bot.send_message(message.chat.id, "You dont have any titles added yet, "
@@ -102,13 +106,13 @@ def cancel_sub(message):
         return
     try:
         number = int(message.text) - 1
-        info = cursor.execute('SELECT sub FROM userSubs WHERE userid=?', (message.from_user.id,))
+        info = cursor.execute('SELECT sub FROM userSubs WHERE chatId=?', (message.chat.id,))
         data = info.fetchall()
 
         title = data[number][0]
 
-        sqlite_delete_with_param = 'DELETE FROM userSubs WHERE userid=? AND sub=?'
-        data_tuple = (message.from_user.id, title)
+        sqlite_delete_with_param = 'DELETE FROM userSubs WHERE chatId=? AND sub=?'
+        data_tuple = (message.chat.id, title)
         cursor.execute(sqlite_delete_with_param, data_tuple)
         sqlite_connection.commit()
 
@@ -160,7 +164,7 @@ def add_finale(message, options, curs):
         number = int(message.text)
         title = options[number - 1]["title"].strip()
         print(title)
-        info = cursor.execute('SELECT sub FROM userSubs WHERE userid=?', (message.from_user.id,))
+        info = cursor.execute('SELECT sub FROM userSubs WHERE chatId=?', (message.chat.id,))
         data = info.fetchall()
         print("--------")
         print(title)
@@ -171,9 +175,9 @@ def add_finale(message, options, curs):
                                                     "If you want to unsubscribe, type /del")
         else:
             sqlite_insert_with_param = """INSERT INTO userSubs
-                                                          (userid, sub)
+                                                          (chatId, sub)
                                                           VALUES (?, ?);"""
-            data_tuple = (message.from_user.id, title)
+            data_tuple = (message.chat.id, title)
             curs.execute(sqlite_insert_with_param, data_tuple)
             sqlite_connection.commit()
 
@@ -204,8 +208,31 @@ def message_reply(message):
 
     if message.text.lower() == "manga":
         answer_manga(message)
-    elif data != None:
-        answer_anyManga(message)
+    elif data is not None:
+        answer_anyManga(message.chat.id, message.text)
+
+
+def alert_all():
+    info = cursor.execute('SELECT title FROM urls')
+    titles = info.fetchall()
+
+    for title in titles:
+        info = cursor.execute('SELECT * FROM userSubs WHERE sub=?', title)
+        data = info.fetchall()
+        for sub in data:
+            answer_anyManga(sub[0], sub[1], silent=True)
+
+
+scheduler = BlockingScheduler(timezone="Europe/Moscow")
+scheduler.add_job(alert_all, "cron", hour=21, minute=00)
+
+
+def schedule_checker():
+    while True:
+        scheduler.start()
+
+
+Thread(target=schedule_checker).start()
 
 
 bot.polling(none_stop=True)
