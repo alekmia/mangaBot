@@ -34,7 +34,7 @@ def start_message(message):
                                       "type /add to subscribe to a manga\n"
                                       "type /del to unsubscribe from a manga\n"
                                       "type /manga to see your subscriptions. "
-                                      "You may then check up on them by clicking on the needed keyboard popup"
+                                      "You may then check up on them by clicking on the needed keyboard popup\n"
                                       "/help to get help on our commands", reply_markup=a)
 
 
